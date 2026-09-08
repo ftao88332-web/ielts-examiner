@@ -49,6 +49,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:12p
 .modal-card .row button{flex:1;height:42px;border-radius:10px;font-size:15px}
 #saveSettingsBtn{background:#2563eb;color:#fff;border:none}
 #closeSettingsBtn{background:#fff;border:1px solid #d1d5db;color:#374151}
+.preview-btn{margin-top:8px;width:100%;height:40px;border:1px solid #d1d5db;border-radius:10px;background:#fff;color:#374151;font-size:14px}
 .hint{font-size:12px;color:#9ca3af;margin:10px 0 0;line-height:1.5}
 </style>
 </head>
@@ -110,6 +111,11 @@ header{display:flex;align-items:center;justify-content:space-between;padding:12p
       <option value="en-US">英语 en-US</option>
       <option value="zh-CN">中文 zh-CN</option>
     </select>
+    <label>考官朗读声音（可留空自动选最自然）</label>
+    <select id="voiceSelect">
+      <option value="">自动选择最自然的声音</option>
+    </select>
+    <button type="button" id="previewVoiceBtn" class="preview-btn">🔊 试听当前声音</button>
     <div class="row">
       <button id="saveSettingsBtn">保存</button>
       <button id="closeSettingsBtn">取消</button>
@@ -161,6 +167,7 @@ const providerEl = document.getElementById("provider");
 const apiKeyEl = document.getElementById("apiKey");
 const modelEl = document.getElementById("model");
 const langEl = document.getElementById("lang");
+const voiceSelect = document.getElementById("voiceSelect");
 
 const PROVIDERS = {
   glm: {endpoint:"https://open.bigmodel.cn/api/paas/v4/chat/completions", defaultModel:"glm-4-flash", keyKey:"glm_api_key", modelKey:"glm_model"},
@@ -179,6 +186,7 @@ function loadSettings(){
   apiKeyEl.value = localStorage.getItem(cfg.keyKey) || "";
   modelEl.value = localStorage.getItem(cfg.modelKey) || cfg.defaultModel;
   langEl.value = localStorage.getItem("speech_lang") || "en-US";
+  voiceSelect.value = localStorage.getItem("tts_voice_uri") || "";
 }
 loadSettings();
 
@@ -202,17 +210,76 @@ voiceBtn.onclick = () => {
 };
 updateVoiceBtn();
 
+function naturalScore(v){
+  const n = v.name.toLowerCase();
+  let score = 0;
+  if(/natural|neural|online|premium|enhanced/.test(n)){ score += 5; }
+  if(/google|xiaoxiao|yunxi|yunyang|aria|jenny|guy|samantha|siri|moira|tessa|daniel|karen|aaron|ana|libby|sonia/.test(n)){ score += 3; }
+  if(/default/.test(n)){ score -= 2; }
+  return score;
+}
+
+function populateVoices(){
+  if(!window.speechSynthesis){ return; }
+  const voices = window.speechSynthesis.getVoices();
+  if(!voices.length){ return; }
+  const saved = localStorage.getItem("tts_voice_uri") || "";
+  voiceSelect.innerHTML = '<option value="">自动选择最自然的声音</option>';
+  voices.forEach(v => {
+    const opt = document.createElement("option");
+    opt.value = v.voiceURI;
+    opt.textContent = v.name + " (" + v.lang + ")";
+    if(saved && v.voiceURI === saved){ opt.selected = true; }
+    voiceSelect.appendChild(opt);
+  });
+}
+if(window.speechSynthesis){
+  populateVoices();
+  window.speechSynthesis.onvoiceschanged = populateVoices;
+}
+voiceSelect.onchange = () => {
+  localStorage.setItem("tts_voice_uri", voiceSelect.value);
+};
+document.getElementById("previewVoiceBtn").onclick = () => {
+  if(!window.speechSynthesis){ addMessage("error", "当前浏览器不支持朗读。"); return; }
+  speak("Hello! I'm your IELTS speaking examiner. Let's begin.");
+};
+
 function pickLang(text){
   const cjk = (text.match(/[\u4e00-\u9fff]/g) || []).length;
   return cjk > 0 ? "zh-CN" : "en-US";
 }
 
+function chooseVoice(lang){
+  const voices = window.speechSynthesis.getVoices();
+  const saved = localStorage.getItem("tts_voice_uri");
+  if(saved){
+    const exact = voices.find(v => v.voiceURI === saved);
+    if(exact){ return exact; }
+  }
+  const base = lang.slice(0,2).toLowerCase();
+  let best = null, bestScore = -999;
+  voices.forEach(v => {
+    const vl = v.lang.toLowerCase();
+    if(base === "en" && !vl.startsWith("en")){ return; }
+    if(base === "zh" && !vl.startsWith("zh")){ return; }
+    const score = naturalScore(v);
+    if(score > bestScore){ bestScore = score; best = v; }
+  });
+  if(best){ return best; }
+  return voices.find(v => v.lang.toLowerCase().startsWith(base)) || null;
+}
+
 function speak(text){
   if(!window.speechSynthesis){ return; }
   window.speechSynthesis.cancel();
+  const lang = pickLang(text);
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = pickLang(text);
+  u.lang = lang;
+  const v = chooseVoice(lang);
+  if(v){ u.voice = v; }
   u.rate = 0.95;
+  u.pitch = 0.98;
   window.speechSynthesis.speak(u);
 }
 
@@ -233,6 +300,7 @@ document.getElementById("saveSettingsBtn").onclick = () => {
   localStorage.setItem(cfg.modelKey, modelEl.value.trim() || cfg.defaultModel);
   localStorage.setItem("active_provider", p);
   localStorage.setItem("speech_lang", langEl.value);
+  localStorage.setItem("tts_voice_uri", voiceSelect.value);
   if(recognition){ recognition.lang = langEl.value; }
   modal.classList.add("hidden");
   addMessage("assistant", "设置已保存（" + (p === "glm" ? "智谱 GLM" : "DeepSeek") + "）。");
