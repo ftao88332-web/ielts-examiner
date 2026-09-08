@@ -40,6 +40,12 @@ header{display:flex;align-items:center;justify-content:space-between;padding:12p
 #submitPart2Btn{flex:1.4;background:#16a34a;color:#fff;border:none;font-weight:600}
 #clearDraftBtn{background:#fff;border:1px solid #d1d5db;color:#6b7280}
 .hidden{display:none!important}
+.record-bar{display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:8px;border-radius:12px;background:#fee2e2;color:#b91c1c;font-weight:600}
+.eq{display:flex;gap:3px;align-items:flex-end;height:20px}
+.eq span{width:4px;background:#dc2626;border-radius:2px;animation:eq 0.8s infinite}
+.eq span:nth-child(1){height:8px}.eq span:nth-child(2){height:16px}.eq span:nth-child(3){height:11px}.eq span:nth-child(4){height:19px}
+@keyframes eq{0%,100%{transform:scaleY(.6)}50%{transform:scaleY(1)}}
+#recordStopBtn{background:#dc2626;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:14px}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}
 .modal-card{width:100%;max-width:420px;background:#fff;border-radius:16px;padding:18px}
 .modal-card h2{margin:0 0 14px;font-size:18px}
@@ -77,6 +83,11 @@ header{display:flex;align-items:center;justify-content:space-between;padding:12p
   <main id="chat" class="chat"></main>
 
   <footer class="input-area">
+    <div id="recordBar" class="record-bar hidden">
+      <div class="eq"><span></span><span></span><span></span><span></span></div>
+      <span id="recordTime">00:00</span>
+      <button id="recordStopBtn" type="button">⏹ 停止</button>
+    </div>
     <div id="part2Box" class="part2box hidden">
       <textarea id="draft" placeholder="Part2 口述内容会累积在这里，可手动修改"></textarea>
       <div class="row">
@@ -498,37 +509,42 @@ async function askModel(){
 
 function initSpeech(){
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!SR){
-    document.getElementById("micBtn").style.display = "none";
-    document.getElementById("micBtn2").style.display = "none";
-    return;
+  if(SR){
+    recognition = new SR();
+    recognition.lang = localStorage.getItem("speech_lang") || "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onresult = (e) => {
+      let text = "";
+      for(let i = 0; i < e.results.length; i++){ text += e.results[i][0].transcript; }
+      text = text.trim();
+      if(!text){ return; }
+      if(recordingMode === "part2"){
+        draftEl.value = draftEl.value ? draftEl.value + " " + text : text;
+      }else{
+        inputEl.value = text;
+        sendText(text);
+      }
+      recordingMode = null;
+    };
+    recognition.onerror = (e) => {
+      if(e.error === "not-allowed" || e.error === "service-not-allowed"){
+        addMessage("error", "麦克风权限被拒绝，请允许使用麦克风，或直接打字输入。");
+      }else if(e.error !== "aborted" && e.error !== "no-speech"){
+        addMessage("error", "语音识别失败：" + e.error);
+      }
+    };
   }
-  recognition = new SR();
-  recognition.lang = localStorage.getItem("speech_lang") || "en-US";
-  recognition.continuous = false;
-  recognition.interimResults = false;
-  recognition.onresult = (e) => {
-    let text = "";
-    for(let i = 0; i < e.results.length; i++){ text += e.results[i][0].transcript; }
-    text = text.trim();
-    if(!text){ return; }
-    if(part2Active){
-      draftEl.value = draftEl.value ? draftEl.value + " " + text : text;
-    }else{
-      inputEl.value = text;
-      sendText(text);
-    }
-  };
-  recognition.onerror = (e) => {
-    setMicState(false);
-    if(e.error === "not-allowed" || e.error === "service-not-allowed"){
-      addMessage("error", "麦克风权限被拒绝，请允许使用麦克风，或直接打字输入。");
-    }else if(e.error !== "aborted" && e.error !== "no-speech"){
-      addMessage("error", "语音识别失败：" + e.error);
-    }
-  };
-  recognition.onend = () => setMicState(false);
 }
+
+let mediaRecorder = null;
+let mediaChunks = [];
+let recordTimerId = null;
+let recordSeconds = 0;
+let recordingMode = null;
+const recordBar = document.getElementById("recordBar");
+const recordTimeEl = document.getElementById("recordTime");
+const recordStopBtn = document.getElementById("recordStopBtn");
 
 function setMicState(on){
   recognizing = on;
@@ -536,17 +552,86 @@ function setMicState(on){
   document.getElementById("micBtn2").style.background = on ? "#fee2e2" : "#fff";
 }
 
-document.getElementById("micBtn").onclick = () => {
-  if(!recognition){ addMessage("error", "当前浏览器不支持语音识别，请打字输入。"); return; }
-  if(recognizing){ recognition.stop(); setMicState(false); return; }
-  try{ recognition.start(); setMicState(true); }catch(e){}
-};
+function showRecordBar(on){
+  if(on){ recordBar.classList.remove("hidden"); } else { recordBar.classList.add("hidden"); }
+}
 
-document.getElementById("micBtn2").onclick = () => {
-  if(!recognition){ addMessage("error", "当前浏览器不支持语音识别，请打字输入。"); return; }
-  if(recognizing){ recognition.stop(); setMicState(false); return; }
-  try{ recognition.start(); setMicState(true); }catch(e){}
-};
+function startRecordTimer(){
+  recordSeconds = 0;
+  recordTimeEl.textContent = "00:00";
+  recordTimerId = setInterval(() => {
+    recordSeconds += 1;
+    const m = String(Math.floor(recordSeconds / 60)).padStart(2, "0");
+    const sec = String(recordSeconds % 60).padStart(2, "0");
+    recordTimeEl.textContent = m + ":" + sec;
+  }, 1000);
+}
+
+function addAudioMessage(url){
+  const div = document.createElement("div");
+  div.className = "msg user";
+  const label = document.createElement("div");
+  label.textContent = "🎤 我的录音";
+  label.style.marginBottom = "6px";
+  const audio = document.createElement("audio");
+  audio.controls = true;
+  audio.src = url;
+  audio.style.maxWidth = "100%";
+  div.appendChild(label);
+  div.appendChild(audio);
+  chatEl.appendChild(div);
+  scrollToBottom();
+}
+
+async function startRecording(mode){
+  recordingMode = mode;
+  let stream = null;
+  let mime = "";
+  if(typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported){
+    mime = ["audio/webm","audio/mp4","audio/ogg"].find(t => MediaRecorder.isTypeSupported(t)) || "";
+  }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({audio: true});
+  }catch(e){
+    addMessage("error", "无法使用麦克风，请允许权限或直接打字输入。");
+    return;
+  }
+  if(typeof MediaRecorder !== "undefined"){
+    mediaChunks = [];
+    mediaRecorder = new MediaRecorder(stream, mime ? {mimeType: mime} : undefined);
+    mediaRecorder.ondataavailable = (e) => { if(e.data && e.data.size){ mediaChunks.push(e.data); } };
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(mediaChunks, {type: mime || "audio/webm"});
+      const url = URL.createObjectURL(blob);
+      addAudioMessage(url);
+      if(stream){ stream.getTracks().forEach(t => t.stop()); }
+    };
+    mediaRecorder.start();
+  }
+  if(recognition){
+    try{ recognition.start(); }catch(e){}
+  }
+  setMicState(true);
+  showRecordBar(true);
+  startRecordTimer();
+}
+
+function stopRecording(){
+  if(mediaRecorder && mediaRecorder.state !== "inactive"){ mediaRecorder.stop(); }
+  if(recognition){ try{ recognition.stop(); }catch(e){} }
+  if(recordTimerId){ clearInterval(recordTimerId); recordTimerId = null; }
+  setMicState(false);
+  showRecordBar(false);
+}
+
+function toggleRecording(mode){
+  if(mediaRecorder && mediaRecorder.state !== "inactive"){ stopRecording(); return; }
+  startRecording(mode);
+}
+
+document.getElementById("micBtn").onclick = () => toggleRecording("normal");
+document.getElementById("micBtn2").onclick = () => toggleRecording("part2");
+recordStopBtn.onclick = () => stopRecording();
 
 initSpeech();
 setPartUI();
