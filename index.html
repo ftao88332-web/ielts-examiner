@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>雅思口语考官</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:#eef1f5;color:#1f2933}
+.app{max-width:640px;margin:0 auto;height:100dvh;display:flex;flex-direction:column;background:#fff}
+header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #e5e7eb;background:#fff}
+.title{font-size:17px;font-weight:700}
+.icon-btn{border:none;background:#f1f3f5;border-radius:10px;width:38px;height:38px;font-size:18px}
+.parts{display:flex;gap:8px;padding:10px 12px;background:#fff;border-bottom:1px solid #f0f0f0}
+.part-btn{flex:1;padding:10px 4px;border:none;border-radius:12px;background:#2563eb;color:#fff;font-size:14px;font-weight:600}
+.part-btn:active{opacity:.8}
+.sub-actions{display:flex;gap:8px;padding:0 12px 10px;background:#fff}
+.sub-actions button{flex:1;padding:7px 4px;border:1px solid #d1d5db;border-radius:10px;background:#fff;color:#374151;font-size:13px}
+.sub-actions button:active{background:#f3f4f6}
+.chat{flex:1;overflow-y:auto;padding:14px 12px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:88%;padding:10px 12px;border-radius:14px;font-size:15px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.msg.assistant{align-self:flex-start;background:#f1f3f5;border-bottom-left-radius:4px}
+.msg.user{align-self:flex-end;background:#dbeafe;border-bottom-right-radius:4px}
+.msg.error{align-self:center;background:#fee2e2;color:#b91c1c}
+.typing{display:inline-flex;gap:4px;align-items:center}
+.typing span{width:6px;height:6px;border-radius:50%;background:#9ca3af;animation:blink 1.2s infinite}
+.typing span:nth-child(2){animation-delay:.2s}
+.typing span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+.input-area{border-top:1px solid #e5e7eb;padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom));background:#fff}
+.row{display:flex;gap:8px;align-items:center}
+#input{flex:1;height:44px;border:1px solid #d1d5db;border-radius:12px;padding:0 12px;font-size:16px}
+#micBtn,#micBtn2{flex:0 0 46px;height:44px;border:1px solid #d1d5db;border-radius:12px;background:#fff;font-size:18px}
+#sendBtn{flex:0 0 72px;height:44px;border:none;border-radius:12px;background:#2563eb;color:#fff;font-size:15px;font-weight:600}
+.part2box textarea{width:100%;height:96px;border:1px solid #d1d5db;border-radius:12px;padding:10px;font-size:16px;resize:none;margin-bottom:8px}
+.part2box .row{flex-wrap:wrap}
+.part2box button{flex:1;min-height:42px;border-radius:12px;font-size:14px}
+#submitPart2Btn{flex:1.4;background:#16a34a;color:#fff;border:none;font-weight:600}
+#clearDraftBtn{background:#fff;border:1px solid #d1d5db;color:#6b7280}
+.hidden{display:none!important}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}
+.modal-card{width:100%;max-width:420px;background:#fff;border-radius:16px;padding:18px}
+.modal-card h2{margin:0 0 14px;font-size:18px}
+.modal-card label{display:block;font-size:13px;color:#6b7280;margin:10px 0 6px}
+.modal-card input,.modal-card select{width:100%;height:42px;border:1px solid #d1d5db;border-radius:10px;padding:0 10px;font-size:15px}
+.modal-card .row{margin-top:16px}
+.modal-card .row button{flex:1;height:42px;border-radius:10px;font-size:15px}
+#saveSettingsBtn{background:#2563eb;color:#fff;border:none}
+#closeSettingsBtn{background:#fff;border:1px solid #d1d5db;color:#374151}
+.hint{font-size:12px;color:#9ca3af;margin:10px 0 0;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="title">🎓 雅思口语考官</div>
+    <button class="icon-btn" id="settingsBtn">⚙️</button>
+  </header>
+
+  <div class="parts">
+    <button class="part-btn" data-part="1">开始 Part1</button>
+    <button class="part-btn" data-part="2">开始 Part2</button>
+    <button class="part-btn" data-part="3">开始 Part3</button>
+  </div>
+  <div class="sub-actions">
+    <button id="changeTopicBtn">🔁 换话题</button>
+    <button id="resetBtn">🔄 重新开始</button>
+  </div>
+
+  <main id="chat" class="chat"></main>
+
+  <footer class="input-area">
+    <div id="part2Box" class="part2box hidden">
+      <textarea id="draft" placeholder="Part2 口述内容会累积在这里，可手动修改"></textarea>
+      <div class="row">
+        <button id="micBtn2">🎤 继续录音</button>
+        <button id="clearDraftBtn">清空</button>
+        <button id="submitPart2Btn">✅ 我已讲完，请批改</button>
+      </div>
+    </div>
+    <div id="normalBox" class="normalbox">
+      <div class="row">
+        <button id="micBtn">🎤</button>
+        <input id="input" type="text" placeholder="输入你的回答…" enterkeyhint="send">
+        <button id="sendBtn">发送</button>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<div id="settingsModal" class="modal hidden">
+  <div class="modal-card">
+    <h2>设置</h2>
+    <label>模型服务商</label>
+    <select id="provider">
+      <option value="glm">智谱 GLM</option>
+      <option value="deepseek">DeepSeek</option>
+    </select>
+    <label>API Key</label>
+    <input id="apiKey" type="password" placeholder="粘贴所选服务商的 API Key">
+    <label>模型名称</label>
+    <input id="model" value="glm-4-flash">
+    <label>语音识别语言（口语练习建议英语）</label>
+    <select id="lang">
+      <option value="en-US">英语 en-US</option>
+      <option value="zh-CN">中文 zh-CN</option>
+    </select>
+    <div class="row">
+      <button id="saveSettingsBtn">保存</button>
+      <button id="closeSettingsBtn">取消</button>
+    </div>
+    <p class="hint">Key 只保存在本机浏览器，直接调用所选服务商的官方接口，不会经过其他服务器。</p>
+  </div>
+</div>
+
+<script>
+const SYSTEM_PROMPT = `你是一名专业的雅思口语考官，考生目标分数5.5-6分，请严格按照剑桥雅思口语真实考试流程对话。
+
+【基础规则】
+1. 考试分为 Part1、Part2、Part3，一次只进行一个部分，不要随意跳转到其他部分。
+2. Part1：日常生活化话题，每次只提1个简短问题，一问一答，不要一次抛出多个问题。
+3. Part2：输出完整Cue-card卡片题目，提示考生有1分钟准备时间，之后需要口述1-2分钟。等待考生完成口述，再给出反馈。
+4. Part3：社会、抽象类深度拓展问题，难度高于Part1，每次只输出1个问题。
+5. 用户可以指令：切换part、更换话题、重新开始，收到指令立刻执行。
+
+【考生回答后的输出格式，必须严格遵守】
+收到考生回答之后，依次输出下面4块内容：
+📊预估分数：给出口语参考分，只在5.0-6.5之间，例如5.5 / 6.0；注明这仅为AI参考，不等于官方成绩
+❌语法&表达错误：列出回答里面的时态、单复数、冠词、句型错误，简短清晰
+✨5.5-6分替换表达：提供简单地道替换，词汇不要过于高级晦涩，适合目标分段
+💡简短改进建议：从流利度、逻辑、拓展细节方面给出1-3条简短建议
+
+完成批改之后，换行输出【考官提问】：写下下一道考试问题。
+
+【强制约束】
+1. 不要长篇说教，手机阅读，文字简洁。
+2. 不要主动解释雅思考试规则，除非用户询问。
+3. 如果考生回答很短，委婉提示可以多拓展细节。
+4. 禁止使用复杂学术词汇，全部表达通俗易懂。
+5. 记住当前处于哪个Part，记住对话历史上下文。
+6. Part2阶段，在考生没有说完口述内容前，不要输出批改，只等待考生回复。`;
+
+let messages = [{role:"system", content:SYSTEM_PROMPT}];
+let currentPart = null;
+let part2Active = false;
+let recognition = null;
+let recognizing = false;
+
+const chatEl = document.getElementById("chat");
+const inputEl = document.getElementById("input");
+const draftEl = document.getElementById("draft");
+const part2Box = document.getElementById("part2Box");
+const normalBox = document.getElementById("normalBox");
+const modal = document.getElementById("settingsModal");
+const providerEl = document.getElementById("provider");
+const apiKeyEl = document.getElementById("apiKey");
+const modelEl = document.getElementById("model");
+const langEl = document.getElementById("lang");
+
+const PROVIDERS = {
+  glm: {endpoint:"https://open.bigmodel.cn/api/paas/v4/chat/completions", defaultModel:"glm-4-flash", keyKey:"glm_api_key", modelKey:"glm_model"},
+  deepseek: {endpoint:"https://api.deepseek.com/chat/completions", defaultModel:"deepseek-chat", keyKey:"deepseek_api_key", modelKey:"deepseek_model"}
+};
+
+function activeProvider(){
+  const saved = localStorage.getItem("active_provider");
+  return PROVIDERS[saved] ? saved : "glm";
+}
+
+function loadSettings(){
+  const p = activeProvider();
+  providerEl.value = p;
+  const cfg = PROVIDERS[p];
+  apiKeyEl.value = localStorage.getItem(cfg.keyKey) || "";
+  modelEl.value = localStorage.getItem(cfg.modelKey) || cfg.defaultModel;
+  langEl.value = localStorage.getItem("speech_lang") || "en-US";
+}
+loadSettings();
+
+providerEl.onchange = () => {
+  const cfg = PROVIDERS[providerEl.value];
+  apiKeyEl.value = localStorage.getItem(cfg.keyKey) || "";
+  modelEl.value = localStorage.getItem(cfg.modelKey) || cfg.defaultModel;
+};
+
+document.getElementById("settingsBtn").onclick = () => modal.classList.remove("hidden");
+document.getElementById("closeSettingsBtn").onclick = () => modal.classList.add("hidden");
+document.getElementById("saveSettingsBtn").onclick = () => {
+  const p = providerEl.value;
+  const cfg = PROVIDERS[p];
+  localStorage.setItem(cfg.keyKey, apiKeyEl.value.trim());
+  localStorage.setItem(cfg.modelKey, modelEl.value.trim() || cfg.defaultModel);
+  localStorage.setItem("active_provider", p);
+  localStorage.setItem("speech_lang", langEl.value);
+  if(recognition){ recognition.lang = langEl.value; }
+  modal.classList.add("hidden");
+  addMessage("assistant", "设置已保存（" + (p === "glm" ? "智谱 GLM" : "DeepSeek") + "）。");
+};
+
+function scrollToBottom(){
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function addMessage(role, text){
+  const div = document.createElement("div");
+  div.className = "msg " + role;
+  div.textContent = text;
+  chatEl.appendChild(div);
+  scrollToBottom();
+  return div;
+}
+
+function setPartUI(){
+  if(part2Active){
+    part2Box.classList.remove("hidden");
+    normalBox.classList.add("hidden");
+  }else{
+    part2Box.classList.add("hidden");
+    normalBox.classList.remove("hidden");
+  }
+}
+
+function sendText(text){
+  text = (text || "").trim();
+  if(!text){ return; }
+  messages.push({role:"user", content:text});
+  addMessage("user", text);
+  inputEl.value = "";
+  askModel();
+}
+
+document.getElementById("sendBtn").onclick = () => sendText(inputEl.value);
+inputEl.addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); sendText(inputEl.value); } });
+
+document.querySelectorAll(".part-btn").forEach(btn => {
+  btn.onclick = () => {
+    const part = parseInt(btn.dataset.part, 10);
+    currentPart = part;
+    const commands = {
+      1: "现在开始雅思口语 Part1，请开始提问",
+      2: "切换到 Part2，请给我一张 cue-card",
+      3: "切换到 Part3，请开始提问"
+    };
+    if(part === 2){ part2Active = true; }
+    else { part2Active = false; }
+    draftEl.value = "";
+    setPartUI();
+    sendText(commands[part]);
+  };
+});
+
+document.getElementById("changeTopicBtn").onclick = () => {
+  if(!currentPart){ addMessage("assistant", "请先点击上方按钮开始一个 Part。"); return; }
+  sendText("请更换一个话题，继续当前 Part");
+};
+
+document.getElementById("resetBtn").onclick = () => {
+  messages = [{role:"system", content:SYSTEM_PROMPT}];
+  currentPart = null;
+  part2Active = false;
+  draftEl.value = "";
+  setPartUI();
+  chatEl.innerHTML = "";
+  addMessage("assistant", "已重新开始。点击上方按钮选择 Part1 / Part2 / Part3。");
+};
+
+draftEl.addEventListener("input", () => { /* draft is used directly on submit */ });
+
+document.getElementById("clearDraftBtn").onclick = () => { draftEl.value = ""; };
+
+document.getElementById("submitPart2Btn").onclick = () => {
+  const text = draftEl.value.trim();
+  if(!text){ addMessage("assistant", "请先录下或输入你的口述内容，再提交批改。"); return; }
+  draftEl.value = "";
+  part2Active = false;
+  setPartUI();
+  sendText(text);
+};
+
+async function askModel(){
+  const p = activeProvider();
+  const cfg = PROVIDERS[p];
+  const key = localStorage.getItem(cfg.keyKey);
+  if(!key){
+    addMessage("error", "请先点击右上角 ⚙️ 设置 " + (p === "glm" ? "智谱 GLM" : "DeepSeek") + " API Key。");
+    modal.classList.remove("hidden");
+    return;
+  }
+  const model = localStorage.getItem(cfg.modelKey) || cfg.defaultModel;
+  const typing = addMessage("assistant", "");
+  typing.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
+  scrollToBottom();
+  try{
+    const res = await fetch(cfg.endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + key
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: messages,
+        temperature: 0.7,
+        stream: false
+      })
+    });
+    if(!res.ok){
+      let detail = "";
+      try{ const errJson = await res.json(); if(errJson && errJson.error){ detail = errJson.error.message || ""; } }catch(e){}
+      throw new Error("接口返回 " + res.status + (detail ? "：" + detail : ""));
+    }
+    const data = await res.json();
+    const reply = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if(!reply){ throw new Error("返回内容为空，请检查模型名称或余额。"); }
+    messages.push({role:"assistant", content:reply});
+    typing.textContent = reply;
+    typing.classList.remove("typing");
+  }catch(err){
+    typing.remove();
+    let msg = "请求失败：" + (err.message || err);
+    if(String(msg).includes("Failed to fetch") || String(msg).includes("CORS")){
+      msg = "网络/跨域请求失败。请确认网络正常；若仍失败，可改用带后端的代理调用。";
+    }
+    addMessage("error", msg);
+  }
+  scrollToBottom();
+}
+
+function initSpeech(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){
+    document.getElementById("micBtn").style.display = "none";
+    document.getElementById("micBtn2").style.display = "none";
+    return;
+  }
+  recognition = new SR();
+  recognition.lang = localStorage.getItem("speech_lang") || "en-US";
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.onresult = (e) => {
+    let text = "";
+    for(let i = 0; i < e.results.length; i++){ text += e.results[i][0].transcript; }
+    text = text.trim();
+    if(!text){ return; }
+    if(part2Active){
+      draftEl.value = draftEl.value ? draftEl.value + " " + text : text;
+    }else{
+      inputEl.value = text;
+      sendText(text);
+    }
+  };
+  recognition.onerror = (e) => {
+    setMicState(false);
+    if(e.error === "not-allowed" || e.error === "service-not-allowed"){
+      addMessage("error", "麦克风权限被拒绝，请允许使用麦克风，或直接打字输入。");
+    }else if(e.error !== "aborted" && e.error !== "no-speech"){
+      addMessage("error", "语音识别失败：" + e.error);
+    }
+  };
+  recognition.onend = () => setMicState(false);
+}
+
+function setMicState(on){
+  recognizing = on;
+  document.getElementById("micBtn").style.background = on ? "#fee2e2" : "#fff";
+  document.getElementById("micBtn2").style.background = on ? "#fee2e2" : "#fff";
+}
+
+document.getElementById("micBtn").onclick = () => {
+  if(!recognition){ addMessage("error", "当前浏览器不支持语音识别，请打字输入。"); return; }
+  if(recognizing){ recognition.stop(); setMicState(false); return; }
+  try{ recognition.start(); setMicState(true); }catch(e){}
+};
+
+document.getElementById("micBtn2").onclick = () => {
+  if(!recognition){ addMessage("error", "当前浏览器不支持语音识别，请打字输入。"); return; }
+  if(recognizing){ recognition.stop(); setMicState(false); return; }
+  try{ recognition.start(); setMicState(true); }catch(e){}
+};
+
+initSpeech();
+setPartUI();
+addMessage("assistant", "Hi, I'm your IELTS speaking examiner. 点击上方按钮开始练习。");
+</script>
+</body>
+</html>
