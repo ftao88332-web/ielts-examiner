@@ -152,11 +152,13 @@ const SYSTEM_PROMPT = `你是一名专业的雅思口语考官，考生目标分
 5. 用户可以指令：切换part、更换话题、重新开始，收到指令立刻执行。
 
 【考生回答后的输出格式，必须严格遵守】
-收到考生回答之后，依次输出下面4块内容：
-📊预估分数：给出口语参考分，只在5.0-6.5之间，例如5.5 / 6.0；注明这仅为AI参考，不等于官方成绩
-❌语法&表达错误：列出回答里面的时态、单复数、冠词、句型错误，简短清晰
-✨5.5-6分替换表达：提供简单地道替换，词汇不要过于高级晦涩，适合目标分段
-💡简短改进建议：从流利度、逻辑、拓展细节方面给出1-3条简短建议
+收到考生回答之后，严格按雅思官方四项评分标准评估：流利度与连贯性、词汇多样性、语法准确性、发音。依次输出：
+📊预估分数：给出参考分，只在5.0-6.5之间，例如5.5 / 6.0；注明仅为AI参考，不等于官方成绩
+🔹流利度与连贯性：1句话指出卡顿、重复、连接词和拓展情况
+🔹词汇多样性：1句话指出用词问题，给出1-2个5.5-6分地道替换
+🔹语法准确性：列出1-3个具体错误，先引用考生原句再给正确说法，覆盖时态/单复数/冠词/句型
+🔹发音：根据文字仅给1条提醒（重音、清晰度、句子重读），并说明无法从文字准确判断
+💡优先改进：从四项中挑最关键1-2点，给出简短可操作建议
 
 完成批改之后，换行输出【考官提问】：写下下一道考试问题。
 
@@ -166,7 +168,8 @@ const SYSTEM_PROMPT = `你是一名专业的雅思口语考官，考生目标分
 3. 如果考生回答很短，委婉提示可以多拓展细节。
 4. 禁止使用复杂学术词汇，全部表达通俗易懂。
 5. 记住当前处于哪个Part，记住对话历史上下文。
-6. Part2阶段，在考生没有说完口述内容前，不要输出批改，只等待考生回复。`;
+6. Part2阶段，在考生没有说完口述内容前，不要输出批改，只等待考生回复。
+7. 批改必须具体：先引用考生原句片段，再给正确表达；禁止空泛点评。`;
 
 let messages = [{role:"system", content:SYSTEM_PROMPT}];
 let currentPart = null;
@@ -319,11 +322,15 @@ function speak(text){
   window.speechSynthesis.speak(u);
 }
 
-function speakAssistantReply(reply){
-  if(!voiceEnabled){ return; }
+function questionText(reply){
   const marker = "【考官提问】";
   const idx = reply.lastIndexOf(marker);
-  const text = idx >= 0 ? reply.slice(idx + marker.length).trim() : reply;
+  return idx >= 0 ? reply.slice(idx + marker.length).trim() : reply;
+}
+
+function speakAssistantReply(reply){
+  if(!voiceEnabled){ return; }
+  const text = questionText(reply);
   if(text){ speak(text); }
 }
 
@@ -354,7 +361,7 @@ function addMessage(role, text){
   if(role === "assistant"){
     div.style.cursor = "pointer";
     div.title = "点按朗读";
-    div.onclick = () => { const t = div.textContent.trim(); if(t){ speak(t); } };
+    div.onclick = () => { const t = questionText(div.textContent).trim(); if(t){ speak(t); } };
   }
   chatEl.appendChild(div);
   scrollToBottom();
