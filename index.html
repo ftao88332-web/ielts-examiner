@@ -8,7 +8,8 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:#eef1f5;color:#1f2933}
-.app{max-width:640px;margin:0 auto;height:100dvh;display:flex;flex-direction:column;background:#fff}
+.app{max-width:640px;margin:0 auto;height:100vh;height:100dvh;display:flex;flex-direction:column;background:#fff}
+@media (min-width:768px){.app{max-width:760px;border-left:1px solid #e5e7eb;border-right:1px solid #e5e7eb;box-shadow:0 0 24px rgba(0,0,0,.06)}.msg{max-width:72%}}
 header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #e5e7eb;background:#fff}
 .title{font-size:17px;font-weight:700}
 .icon-btn{border:none;background:#f1f3f5;border-radius:10px;width:38px;height:38px;font-size:18px}
@@ -51,6 +52,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:12p
 .modal-card h2{margin:0 0 14px;font-size:18px}
 .modal-card label{display:block;font-size:13px;color:#6b7280;margin:10px 0 6px}
 .modal-card input,.modal-card select{width:100%;height:42px;border:1px solid #d1d5db;border-radius:10px;padding:0 10px;font-size:15px}
+.modal-card input[type=range]{height:34px;padding:0}
 .modal-card input:disabled,.modal-card select:disabled{background:#f3f4f6;color:#9ca3af}
 .modal-card .row{margin-top:16px}
 .modal-card .row button{flex:1;height:42px;border-radius:10px;font-size:15px}
@@ -128,6 +130,8 @@ header{display:flex;align-items:center;justify-content:space-between;padding:12p
     <select id="voiceSelect">
       <option value="">自动选择最自然的声音</option>
     </select>
+    <label>语速 <span id="rateVal">0.95</span></label>
+    <input id="rateRange" type="range" min="0.8" max="1.15" step="0.05" value="0.95">
     <button type="button" id="previewVoiceBtn" class="preview-btn">🔊 试听当前声音</button>
     <div class="row">
       <button id="saveSettingsBtn">保存</button>
@@ -181,6 +185,8 @@ const apiKeyEl = document.getElementById("apiKey");
 const modelEl = document.getElementById("model");
 const langEl = document.getElementById("lang");
 const voiceSelect = document.getElementById("voiceSelect");
+const rateRange = document.getElementById("rateRange");
+const rateVal = document.getElementById("rateVal");
 
 const PROVIDERS = {
   free: {type:"free", endpoint:null, defaultModel:"openai", keyKey:null, modelKey:null},
@@ -208,6 +214,8 @@ function loadSettings(){
   modelEl.value = cfg.modelKey ? (localStorage.getItem(cfg.modelKey) || cfg.defaultModel) : cfg.defaultModel;
   langEl.value = localStorage.getItem("speech_lang") || "en-US";
   voiceSelect.value = localStorage.getItem("tts_voice_uri") || "";
+  rateRange.value = localStorage.getItem("tts_rate") || "0.95";
+  rateVal.textContent = rateRange.value;
   updateProviderFields();
 }
 loadSettings();
@@ -264,6 +272,10 @@ if(window.speechSynthesis){
 voiceSelect.onchange = () => {
   localStorage.setItem("tts_voice_uri", voiceSelect.value);
 };
+rateRange.oninput = () => {
+  rateVal.textContent = rateRange.value;
+  localStorage.setItem("tts_rate", rateRange.value);
+};
 document.getElementById("previewVoiceBtn").onclick = () => {
   if(!window.speechSynthesis){ addMessage("error", "当前浏览器不支持朗读。"); return; }
   speak("Hello! I'm your IELTS speaking examiner. Let's begin.");
@@ -302,7 +314,7 @@ function speak(text){
   u.lang = lang;
   const v = chooseVoice(lang);
   if(v){ u.voice = v; }
-  u.rate = 0.95;
+  u.rate = parseFloat(localStorage.getItem("tts_rate") || "0.95");
   u.pitch = 0.98;
   window.speechSynthesis.speak(u);
 }
